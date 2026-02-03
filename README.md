@@ -1,12 +1,93 @@
-# VK registration bot (Python + SQLite)
+# 14_feb_bot_gf — анонимный бот на 14 февраля (VK + Telegram) + админ‑панель
 
-A minimal VK community bot that listens for new messages and registers the sender in a SQLite database. It stores the raw user profile JSON plus a few extracted fields (first_name, last_name, sex) when available.
+Проект для проведения анонимного знакомства/общения к 14 февраля. Участники регистрируются через VK или Telegram, заполняют анкету, после чего администратор формирует пары. В период общения бот пересылает сообщения партнёрам. В комплекте есть веб‑админка (Flask) для просмотра базы, управления режимами и рассылок.
 
-## Setup
+## Что внутри
 
-1) Create and configure your VK community token (messages access) and enable Bot Long Poll in your community settings (see VK docs).
+- `bot.py` — VK-бот (Long Poll). Регистрирует пользователей, задаёт вопросы анкеты и пересылает сообщения в период общения.
+- `tg_bot.py` — Telegram‑бот (python-telegram-bot). Полная анкета, подтверждение/редактирование, пересылка сообщений в период общения. Использует режимы (`off`, `registration`, `prep`, `chat`, `finished`).
+- `app.py` — Flask API + статическая админ‑панель (`static/index.html`). Управление пользователями, парами, режимом, тестовые/массовые рассылки в Telegram, пинги участникам.
+- `bot.sqlite3` — база SQLite с пользователями, парами и настройками (создаётся автоматически, можно хранить рядом с проектом).
+- `docker-compose.yml` — запуск веб‑части и Telegram‑бота в Docker.
 
-2) Install dependencies:
+## Как работает приложение
+
+1. Пользователь пишет боту (VK или Telegram).
+2. В период регистрации бот собирает анкету по шагам.
+3. Администратор формирует пары (через админ‑панель / API).
+4. В период общения сообщения пересылаются партнёрам.
+
+Telegram‑бот управляется режимами в таблице `settings` и через админ‑панель. VK‑бот ориентируется на временные окна регистрации/общения.
+
+## Переменные окружения (`.env`)
+
+Файл `.env` загружается автоматически в `bot.py`, `tg_bot.py`, `app.py` через `python-dotenv`.
+
+- `VK_GROUP_TOKEN` — токен сообщества VK с доступом к сообщениям.
+- `VK_GROUP_ID` — ID сообщества VK.
+- `VK_FIELDS` — поля для `users.get` (через запятую). Если пусто, используется `sex,bdate`.
+- `VK_API_VERSION` — версия API VK для `vk_api` (опционально).
+- `TG_BOT_TOKEN` — токен Telegram‑бота.
+- `TG_ADMIN_IDS` — список Telegram ID администраторов (через запятую) для тестовых рассылок.
+- `DB_PATH` — путь к SQLite файлу (по умолчанию `bot.sqlite3`).
+- `API_HOST` — хост для Flask (`app.py`).
+- `API_PORT` — порт для Flask.
+- `API_DEBUG` — включить debug режим (`1/true/yes`).
+- `MANAGER_PASS` — пароль для доступа к админ‑панели/API (роль manager).
+- `ADMIN_PASS` — пароль для полного доступа (роль admin).
+- `REG_START`, `REG_END` — окно регистрации (локальное время сервера).
+- `PREP_START`, `PREP_END` — окно подготовки пар.
+- `CHAT_START`, `CHAT_END` — окно общения.
+
+Важно: время берётся из системного времени сервера. На VPS проверьте таймзону.
+
+## База данных
+
+Таблицы создаются автоматически при первом запуске.
+
+`users` (основные поля):
+- `user_id`, `platform` (`vk` или `tg`)
+- `first_name`, `last_name`, `sex`, `age`
+- `status` (`pre_registered`, `registered`)
+- `registration_step` (текущий шаг анкеты)
+- `bio`, `looking_for`, `love_definition`, `zodiac`, `date_idea`, `share`, `red_flags`, `pet`, `important`, `temperament`
+- `profile_json` — сырой профиль VK/TG
+- `registered_at`, `updated_at`
+- `last_message_*` — последнее сообщение
+
+`pairs`:
+- `user1_id`, `user2_id` — ID пользователей в таблице `users`
+- `created_at`
+
+`settings`:
+- `key`, `value`, `updated_at` — режим работы бота (`mode`).
+
+## Админ‑панель и API
+
+Админка доступна по адресу `http://HOST:PORT/?pass=YOUR_PASSWORD`.
+
+Роли:
+- `manager` — доступ к CRUD пользователей и пар.
+- `admin` — всё выше + управление режимом и рассылки Telegram.
+
+Основные API‑эндпоинты:
+- `GET /api/health` — проверка статуса.
+- `GET /api/users` — список пользователей.
+- `GET /api/users/<id>` — карточка пользователя.
+- `POST /api/users` — создать пользователя.
+- `PUT /api/users/<id>` — обновить пользователя.
+- `DELETE /api/users/<id>` — удалить пользователя.
+- `POST /api/pairs` — создать пару.
+- `DELETE /api/pairs/<user_id>` — удалить пару.
+- `POST /api/ping/<user_id>` — отправить напоминание пользователю (VK или TG).
+- `GET /api/settings` — получить режим (admin).
+- `PUT /api/settings` — обновить режим (admin).
+- `POST /api/broadcast/tg/test` — тестовая рассылка (admin).
+- `POST /api/broadcast/tg/all` — рассылка всем TG пользователям (admin).
+
+## Локальный запуск
+
+1. Установите зависимости:
 
 ```bash
 python3 -m venv .venv
@@ -14,96 +95,101 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3) Configure environment variables:
+2. Создайте `.env` на основе `.env.example` и заполните переменные.
+
+3. Запуск компонентов:
 
 ```bash
-export VK_GROUP_TOKEN="your_group_token"
-export VK_GROUP_ID="123456789"
-export TG_BOT_TOKEN="your_telegram_token"
-export TG_ADMIN_IDS="123456789,987654321"
-export VK_FIELDS=""
-export VK_API_VERSION=""
-export DB_PATH="bot.sqlite3"
-export API_HOST="127.0.0.1"
-export API_PORT="8000"
-export API_DEBUG=""
-export MANAGER_PASS="your_manager_password"
-export ADMIN_PASS="your_admin_password"
-export REG_START="2026-02-05 00:00:00"
-export REG_END="2026-02-12 23:59:59"
-export PREP_START="2026-02-13 00:00:00"
-export PREP_END="2026-02-13 23:59:59"
-export CHAT_START="2026-02-14 00:00:00"
-export CHAT_END="2026-02-14 23:59:59"
+python bot.py     # VK-бот
+python tg_bot.py  # Telegram-бот
+python app.py     # админ‑панель + API
 ```
 
-- `VK_FIELDS`: comma-separated list of fields for `users.get` (define per VK API docs). If empty, the bot defaults to requesting `sex,bdate`. The bot stores the full response JSON and extracts `first_name`, `last_name`, `sex`, and age (if `bdate` has a year).
-- `VK_API_VERSION`: optional API version passed to vk_api.
-- `TG_BOT_TOKEN`: Telegram bot token for `tg_bot.py`.
-- `TG_ADMIN_IDS`: comma-separated Telegram user IDs used for test broadcasts in the admin panel.
-- `DB_PATH`: optional path to the SQLite file.
-- `API_HOST`, `API_PORT`, `API_DEBUG`: settings for the API service.
-- `MANAGER_PASS`, `ADMIN_PASS`: passwords for simplified admin access (pass via URL `?pass=...`).
-- `REG_START`, `REG_END`: registration window (local time).
-- `PREP_START`, `PREP_END`: preparation window (local time).
-- `CHAT_START`, `CHAT_END`: chat window (local time).
+Откройте админ‑панель: `http://127.0.0.1:8000/?pass=YOUR_PASSWORD`.
 
-You can also use a `.env` file (see `.env.example`) — both `bot.py` and `app.py` load it automatically.
+## Запуск через Docker Compose
 
-4) Run the bot:
+Файл `docker-compose.yml` поднимает веб‑часть и Telegram‑бота. VK‑бот в Compose не включён — его можно запускать отдельно или добавить ещё один сервис.
 
-```bash
-python bot.py
-```
-
-5) Run the Telegram bot:
-
-```bash
-python tg_bot.py
-```
-
-6) Run the API + frontend:
-
-```bash
-python app.py
-```
-
-Open `http://127.0.0.1:8000/?pass=YOUR_PASSWORD` in a browser to view the database.
-Admins can send Telegram broadcasts from the panel. Test sends go to `TG_ADMIN_IDS`.
-
-## Docker Compose
-
-1) Ensure your `.env` is filled (same variables as above).
-
-2) Build and start the Telegram bot + web app:
+1. Подготовьте `.env` (как в локальном запуске).
+2. Запустите:
 
 ```bash
 docker compose up -d --build
 ```
 
-3) Open `http://127.0.0.1:8000/?pass=YOUR_PASSWORD`.
+3. Админ‑панель будет доступна на `http://HOST:8000/?pass=YOUR_PASSWORD`.
 
-Compose mounts `./bot.sqlite3` into both services, so the same DB file is shared.
+## Продакшн‑развёртывание на VPS (Linux)
 
-## Database
+1. Арендуйте VPS с Ubuntu 22.04/24.04.
+2. Подключитесь по SSH:
 
-A `users` table is created automatically. Columns:
-- `id` (primary key, autoincrement)
-- `user_id` (VK/Telegram user id, unique per platform)
-- `platform` (`vk` or `tg`)
-- `first_name`, `last_name`, `sex`
-- `status` (`pre_registered` or `registered`), `registration_step`, `bio`, `age`
-- `looking_for`, `love_definition`, `zodiac`, `date_idea`, `share`, `red_flags`, `pet`, `important`, `temperament`
-- `profile_json` (raw JSON response from `users.get`)
-- `registered_at`, `updated_at`
-- `last_message_id`, `last_message_at`, `last_message_text`, `last_peer_id`
+```bash
+ssh root@YOUR_SERVER_IP
+```
 
-A `pairs` table is created automatically. Columns:
-- `user1_id` (internal `users.id`)
-- `user2_id` (internal `users.id`)
-- `created_at`
+3. Установите Docker и Compose:
 
-## Notes
+```bash
+apt update
+apt install -y docker.io docker-compose-plugin git
+systemctl enable --now docker
+```
 
-- The `sex` value is stored exactly as returned by VK; interpret it according to VK API docs.
-- If you want to capture additional data, add the desired fields in `VK_FIELDS`.
+4. Клонируйте репозиторий:
+
+```bash
+git clone <YOUR_REPO_URL> 14_feb_bot_gf
+cd 14_feb_bot_gf
+```
+
+5. Создайте `.env` (по `.env.example`) и заполните токены/пароли.
+
+6. Откройте порт 8000 в фаерволе (если используете UFW):
+
+```bash
+ufw allow 8000/tcp
+```
+
+7. Запустите проект:
+
+```bash
+docker compose up -d --build
+```
+
+8. Проверьте логи:
+
+```bash
+docker compose logs -f
+```
+
+Опционально настройте домен и прокси (Nginx) для доступа к панели через HTTPS.
+
+## Поддержка и обслуживание
+
+- Обновление кода:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+- Резервные копии:
+
+```bash
+cp bot.sqlite3 bot.sqlite3.bak
+```
+
+- Проверка статуса контейнеров:
+
+```bash
+docker compose ps
+```
+
+## Замечания
+
+- Все временные окна (`REG_*`, `PREP_*`, `CHAT_*`) зависят от времени сервера.
+- Для рассылок Telegram нужен `TG_BOT_TOKEN`, а для тестовых рассылок — `TG_ADMIN_IDS`.
+- Сообщения в период общения пересылаются только если пара создана в таблице `pairs`.
+
