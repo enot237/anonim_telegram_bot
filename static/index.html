@@ -1,0 +1,1372 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VK Bot Users</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes pingPulse {
+        0%,
+        100% {
+          background-color: #fecaca;
+          border-color: #f87171;
+          color: #991b1b;
+        }
+        50% {
+          background-color: #fee2e2;
+          border-color: #ef4444;
+          color: #b91c1c;
+        }
+      }
+      .ping-alert {
+        animation: pingPulse 1.2s ease-in-out infinite;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <div class="mx-auto w-[90vw] max-w-none px-0 py-10">
+      <header class="flex flex-col gap-3 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-slate-400">VK bot admin</p>
+          <h1 class="text-3xl font-semibold">Users database</h1>
+          <p class="mt-2 text-sm text-slate-500">
+            Minimal CRUD panel for the SQLite user registry.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button
+            id="refresh"
+            class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow"
+          >
+            Refresh
+          </button>
+          <button
+            id="reset-form"
+            class="rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+          >
+            New user
+          </button>
+        </div>
+      </header>
+
+      <div id="auth-banner" class="mt-6 hidden rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        Вы не авторизованы.
+      </div>
+
+      <section id="broadcast-panel" class="mt-6 hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 class="text-lg font-semibold">Telegram broadcast</h2>
+            <p class="text-sm text-slate-500">Массовая рассылка доступна только администратору.</p>
+          </div>
+          <div id="broadcast-status" class="text-sm text-slate-400"></div>
+        </div>
+        <div class="space-y-4 px-6 py-5">
+          <div>
+            <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Отправка всем участникам в телеграм
+            </label>
+            <textarea
+              id="broadcast-text"
+              rows="4"
+              class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              placeholder="Введите текст рассылки"
+            ></textarea>
+            <p class="mt-2 text-xs text-slate-400">Поддерживается Markdown.</p>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <button
+              id="broadcast-test"
+              class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow"
+            >
+              Отправить тестово
+            </button>
+            <button
+              id="broadcast-all"
+              class="rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+            >
+              Отправить всем участникам
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="mode-panel" class="mt-6 hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 class="text-lg font-semibold">Bot mode</h2>
+            <p class="text-sm text-slate-500">Ручное управление этапами работы бота.</p>
+          </div>
+          <div id="mode-status" class="text-sm text-slate-400"></div>
+        </div>
+        <div class="space-y-4 px-6 py-5">
+          <div>
+            <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Текущий режим
+            </label>
+            <div class="mt-2 flex flex-wrap gap-3">
+              <select
+                id="mode-select"
+                class="min-w-[220px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              >
+                <option value="off">Ожидание запуска</option>
+                <option value="registration">Регистрация</option>
+                <option value="prep">Подготовка пар</option>
+                <option value="chat">Общение</option>
+                <option value="finished">Завершено</option>
+              </select>
+              <button
+                id="mode-save"
+                class="rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Сохранить режим
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-slate-400">
+              Изменение режима влияет на доступность регистрации и чата.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 class="text-lg font-semibold">Latest entries</h2>
+            <p id="meta" class="text-sm text-slate-500">Loading…</p>
+            <p id="gender-stats" class="text-sm text-slate-500"></p>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-sm text-slate-500">
+              <input
+                id="filter-unpaired"
+                type="checkbox"
+                class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+              />
+              Only unpaired
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-500">
+              Limit
+              <input
+                id="limit"
+                type="number"
+                min="1"
+                max="200"
+                value="50"
+                class="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              />
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-500">
+              Offset
+              <input
+                id="offset"
+                type="number"
+                min="0"
+                value="0"
+                class="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              />
+            </label>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-[1600px] w-full text-left text-xs">
+            <thead class="bg-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr>
+                  <th class="px-4 py-3">ID</th>
+                  <th class="px-4 py-3" data-col="user_id">VK/TG ID</th>
+                  <th class="px-4 py-3" data-col="platform">Platform</th>
+                  <th class="px-4 py-3">Partner</th>
+                  <th class="px-4 py-3" data-col="name">Name</th>
+                <th class="px-4 py-3">Age</th>
+                <th class="px-4 py-3">Sex</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3" data-col="registration_step">Step</th>
+                <th class="px-4 py-3">Bio</th>
+                <th class="px-4 py-3">Looking for</th>
+                <th class="px-4 py-3">Love definition</th>
+                <th class="px-4 py-3">Zodiac</th>
+                <th class="px-4 py-3">Date idea</th>
+                <th class="px-4 py-3">Share</th>
+                <th class="px-4 py-3">Red flags</th>
+                <th class="px-4 py-3">Pet</th>
+                <th class="px-4 py-3">Important</th>
+                <th class="px-4 py-3">Temperament</th>
+                <th class="px-4 py-3">Registered</th>
+                <th class="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="hidden px-6 py-8 text-center text-sm text-slate-400">
+          No users yet. Start by creating one.
+        </div>
+      </section>
+    </div>
+
+    <div id="user-modal" class="fixed inset-0 z-50 hidden">
+      <div id="modal-backdrop" class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+      <div class="relative mx-auto mt-8 w-[75vw] max-w-none">
+        <div class="flex max-h-[90vh] flex-col rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Editor</p>
+              <h2 id="mode-label" class="text-lg font-semibold">Create user</h2>
+            </div>
+            <div class="flex items-center gap-4">
+              <span id="form-status" class="text-xs text-slate-400"></span>
+              <button
+                id="close-modal"
+                class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <form id="user-form" class="grid gap-4 overflow-y-auto p-6 md:grid-cols-2">
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">ID</label>
+              <input
+                id="internal_id"
+                type="number"
+                class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                placeholder="Auto"
+                disabled
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">VK User ID</label>
+              <input
+                id="user_id"
+                type="number"
+                min="1"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="VK user id"
+                required
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Platform</label>
+              <select
+                id="platform"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              >
+                <option value="vk">vk</option>
+                <option value="tg">tg</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</label>
+              <select
+                id="status"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              >
+                <option value="">(leave unchanged)</option>
+                <option value="pre_registered">pre_registered</option>
+                <option value="registered">registered</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">First name</label>
+              <input
+                id="first_name"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Alina"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last name</label>
+              <input
+                id="last_name"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Kiseleva"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Age</label>
+              <input
+                id="age"
+                type="number"
+                min="10"
+                max="100"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="26"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sex (VK value)</label>
+              <input
+                id="sex"
+                type="number"
+                min="0"
+                max="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="0 / 1 / 2"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registration step</label>
+              <input
+                id="registration_step"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="bio / age / sex / ..."
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Bio</label>
+              <textarea
+                id="bio"
+                rows="3"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Short bio"
+              ></textarea>
+            </div>
+
+            <div class="md:col-span-2">
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Registration answers</p>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Who are you looking for?</label>
+              <textarea
+                id="looking_for"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Кого ты ищешь"
+              ></textarea>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Love meaning</label>
+              <textarea
+                id="love_definition"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="В чем выражается любовь"
+              ></textarea>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Zodiac sign</label>
+              <input
+                id="zodiac"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Стрелец"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Temperament</label>
+              <input
+                id="temperament"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Экстраверт / амбиверт / интроверт"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Date idea</label>
+              <textarea
+                id="date_idea"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Как бы ты провел время"
+              ></textarea>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">What can you share?</label>
+              <textarea
+                id="share"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Что готов(а) разделить"
+              ></textarea>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Red flags</label>
+              <textarea
+                id="red_flags"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Ред флаги"
+              ></textarea>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pet</label>
+              <input
+                id="pet"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Кошка, собака, нет"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Important in partner</label>
+              <textarea
+                id="important"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Что важно в собеседнике"
+              ></textarea>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered at</label>
+              <input
+                id="registered_at"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="YYYY-MM-DDTHH:MM:SS"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Updated at</label>
+              <input
+                id="updated_at"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="YYYY-MM-DDTHH:MM:SS"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last message id</label>
+              <input
+                id="last_message_id"
+                type="number"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="123"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last message at</label>
+              <input
+                id="last_message_at"
+                type="text"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="YYYY-MM-DDTHH:MM:SS"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last message text</label>
+              <textarea
+                id="last_message_text"
+                rows="2"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="Optional note"
+              ></textarea>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last peer id</label>
+              <input
+                id="last_peer_id"
+                type="number"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="0"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile JSON</label>
+              <textarea
+                id="profile_json"
+                rows="3"
+                class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+                placeholder="{...}"
+              ></textarea>
+            </div>
+
+            <div class="md:col-span-2 flex flex-wrap gap-3 pt-2">
+              <button
+                id="save"
+                type="submit"
+                class="flex-1 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Save
+              </button>
+              <button
+                id="cancel"
+                type="button"
+                class="flex-1 rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow"
+              >
+                Cancel
+              </button>
+            </div>
+            <p class="md:col-span-2 text-xs text-slate-400">
+              Leave fields empty to keep them unchanged on update.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="link-modal" class="fixed inset-0 z-50 hidden">
+      <div id="link-backdrop" class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
+      <div class="relative mx-auto mt-20 w-[420px] max-w-[90vw]">
+        <div class="rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Pairing</p>
+              <h3 class="text-lg font-semibold">Link users</h3>
+            </div>
+            <button
+              id="link-cancel"
+              class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+              type="button"
+            >
+              Close
+            </button>
+          </div>
+          <div class="space-y-3 px-5 py-4">
+            <input
+              id="link-search"
+              type="text"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              placeholder="Search by name or ID"
+            />
+            <div id="link-results" class="max-h-64 space-y-2 overflow-y-auto"></div>
+            <div id="link-selected" class="text-sm text-slate-500">No partner selected</div>
+            <div id="link-error" class="text-xs text-rose-500"></div>
+            <div class="flex gap-3 pt-2">
+              <button
+                id="link-save"
+                type="button"
+                class="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              >
+                Link
+              </button>
+              <button
+                id="link-cancel-secondary"
+                type="button"
+                class="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        mode: "create",
+        selectedUserId: null,
+        allUsers: [],
+        linkTargetUserId: null,
+        linkCurrentPartnerId: null,
+        linkSelectedPartnerId: null,
+        linkTargetPlatform: null,
+        role: null,
+        chatStart: null,
+        chatEnd: null,
+      };
+
+      const elements = {
+        meta: document.getElementById("meta"),
+        genderStats: document.getElementById("gender-stats"),
+        empty: document.getElementById("empty"),
+        body: document.getElementById("users-body"),
+        limit: document.getElementById("limit"),
+        offset: document.getElementById("offset"),
+        filterUnpaired: document.getElementById("filter-unpaired"),
+        refresh: document.getElementById("refresh"),
+        resetForm: document.getElementById("reset-form"),
+        authBanner: document.getElementById("auth-banner"),
+        broadcastPanel: document.getElementById("broadcast-panel"),
+        broadcastText: document.getElementById("broadcast-text"),
+        broadcastTest: document.getElementById("broadcast-test"),
+        broadcastAll: document.getElementById("broadcast-all"),
+        broadcastStatus: document.getElementById("broadcast-status"),
+        modePanel: document.getElementById("mode-panel"),
+        modeSelect: document.getElementById("mode-select"),
+        modeSave: document.getElementById("mode-save"),
+        modeStatus: document.getElementById("mode-status"),
+        form: document.getElementById("user-form"),
+        modeLabel: document.getElementById("mode-label"),
+        formStatus: document.getElementById("form-status"),
+        internalId: document.getElementById("internal_id"),
+        userId: document.getElementById("user_id"),
+        platform: document.getElementById("platform"),
+        firstName: document.getElementById("first_name"),
+        lastName: document.getElementById("last_name"),
+        age: document.getElementById("age"),
+        sex: document.getElementById("sex"),
+        statusField: document.getElementById("status"),
+        registrationStep: document.getElementById("registration_step"),
+        bio: document.getElementById("bio"),
+        lookingFor: document.getElementById("looking_for"),
+        loveDefinition: document.getElementById("love_definition"),
+        zodiac: document.getElementById("zodiac"),
+        dateIdea: document.getElementById("date_idea"),
+        share: document.getElementById("share"),
+        redFlags: document.getElementById("red_flags"),
+        pet: document.getElementById("pet"),
+        important: document.getElementById("important"),
+        temperament: document.getElementById("temperament"),
+        registeredAt: document.getElementById("registered_at"),
+        updatedAt: document.getElementById("updated_at"),
+        lastMessageId: document.getElementById("last_message_id"),
+        lastMessageAt: document.getElementById("last_message_at"),
+        lastMessageText: document.getElementById("last_message_text"),
+        lastPeerId: document.getElementById("last_peer_id"),
+        profileJson: document.getElementById("profile_json"),
+        cancel: document.getElementById("cancel"),
+        modal: document.getElementById("user-modal"),
+        modalBackdrop: document.getElementById("modal-backdrop"),
+        closeModal: document.getElementById("close-modal"),
+        linkModal: document.getElementById("link-modal"),
+        linkBackdrop: document.getElementById("link-backdrop"),
+        linkSearch: document.getElementById("link-search"),
+        linkResults: document.getElementById("link-results"),
+        linkSelected: document.getElementById("link-selected"),
+        linkSave: document.getElementById("link-save"),
+        linkCancel: document.getElementById("link-cancel"),
+        linkCancelSecondary: document.getElementById("link-cancel-secondary"),
+        linkError: document.getElementById("link-error"),
+      };
+
+      const auth = {
+        pass: new URLSearchParams(window.location.search).get("pass"),
+        authorized: false,
+      };
+
+      const managerHiddenColumns = new Set(["user_id", "name", "platform", "registration_step"]);
+
+      function applyRoleVisibility() {
+        const hide = state.role === "manager";
+        managerHiddenColumns.forEach((col) => {
+          document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => {
+            el.classList.toggle("hidden", hide);
+          });
+        });
+        if (elements.linkSearch) {
+          elements.linkSearch.placeholder = hide ? "Search by internal ID" : "Search by name or ID";
+        }
+      }
+
+      function applyAdminVisibility() {
+        const show = state.role === "admin";
+        if (elements.broadcastPanel) {
+          elements.broadcastPanel.classList.toggle("hidden", !show);
+        }
+        if (elements.modePanel) {
+          elements.modePanel.classList.toggle("hidden", !show);
+        }
+      }
+
+      function updateRole(role) {
+        if (!role) return;
+        if (state.role !== role) {
+          state.role = role;
+        }
+        applyRoleVisibility();
+        applyAdminVisibility();
+        if (state.role === "admin") {
+          loadMode();
+        }
+      }
+
+      function updateChatWindow(data) {
+        if (!data) return;
+        if (typeof data.chat_start === "string") {
+          state.chatStart = data.chat_start;
+        }
+        if (typeof data.chat_end === "string") {
+          state.chatEnd = data.chat_end;
+        }
+      }
+
+      function setAuthState(authorized) {
+        auth.authorized = authorized;
+        if (authorized) {
+          elements.authBanner.classList.add("hidden");
+          elements.refresh.disabled = false;
+          elements.resetForm.disabled = false;
+        } else {
+          elements.authBanner.classList.remove("hidden");
+          elements.refresh.disabled = true;
+          elements.resetForm.disabled = true;
+          if (elements.broadcastPanel) {
+            elements.broadcastPanel.classList.add("hidden");
+          }
+          if (elements.modePanel) {
+            elements.modePanel.classList.add("hidden");
+          }
+        }
+      }
+
+      if (!auth.pass) {
+        setAuthState(false);
+      }
+
+      function openModal() {
+        elements.modal.classList.remove("hidden");
+        document.body.classList.add("overflow-hidden");
+      }
+
+      function closeModal() {
+        elements.modal.classList.add("hidden");
+        document.body.classList.remove("overflow-hidden");
+      }
+
+      function openLinkModal() {
+        elements.linkModal.classList.remove("hidden");
+        document.body.classList.add("overflow-hidden");
+      }
+
+      function closeLinkModal() {
+        elements.linkModal.classList.add("hidden");
+        document.body.classList.remove("overflow-hidden");
+      }
+
+      function setFormMode(mode, user) {
+        state.mode = mode;
+        if (mode === "edit" && user) {
+          state.selectedUserId = user.id;
+          elements.modeLabel.textContent = `Edit user ${user.user_id}`;
+          elements.internalId.value = user.id ?? "";
+          elements.userId.value = user.user_id ?? "";
+          elements.userId.setAttribute("disabled", "disabled");
+          elements.platform.value = user.platform ?? "vk";
+          elements.firstName.value = user.first_name ?? "";
+          elements.lastName.value = user.last_name ?? "";
+          elements.age.value = user.age ?? "";
+          elements.sex.value = user.sex ?? "";
+          elements.statusField.value = user.status ?? "";
+          elements.registrationStep.value = user.registration_step ?? "";
+          elements.bio.value = user.bio ?? "";
+          elements.lookingFor.value = user.looking_for ?? "";
+          elements.loveDefinition.value = user.love_definition ?? "";
+          elements.zodiac.value = user.zodiac ?? "";
+          elements.dateIdea.value = user.date_idea ?? "";
+          elements.share.value = user.share ?? "";
+          elements.redFlags.value = user.red_flags ?? "";
+          elements.pet.value = user.pet ?? "";
+          elements.important.value = user.important ?? "";
+          elements.temperament.value = user.temperament ?? "";
+          elements.registeredAt.value = user.registered_at ?? "";
+          elements.updatedAt.value = user.updated_at ?? "";
+          elements.lastMessageId.value = user.last_message_id ?? "";
+          elements.lastMessageAt.value = user.last_message_at ?? "";
+          elements.lastMessageText.value = user.last_message_text ?? "";
+          elements.lastPeerId.value = user.last_peer_id ?? "";
+          elements.profileJson.value = user.profile_json ?? "";
+        } else {
+          state.selectedUserId = null;
+          elements.modeLabel.textContent = "Create user";
+          elements.internalId.value = "";
+          elements.userId.removeAttribute("disabled");
+          elements.userId.value = "";
+          elements.platform.value = "vk";
+          elements.firstName.value = "";
+          elements.lastName.value = "";
+          elements.age.value = "";
+          elements.sex.value = "";
+          elements.statusField.value = "";
+          elements.registrationStep.value = "";
+          elements.bio.value = "";
+          elements.lookingFor.value = "";
+          elements.loveDefinition.value = "";
+          elements.zodiac.value = "";
+          elements.dateIdea.value = "";
+          elements.share.value = "";
+          elements.redFlags.value = "";
+          elements.pet.value = "";
+          elements.important.value = "";
+          elements.temperament.value = "";
+          elements.registeredAt.value = "";
+          elements.updatedAt.value = "";
+          elements.lastMessageId.value = "";
+          elements.lastMessageAt.value = "";
+          elements.lastMessageText.value = "";
+          elements.lastPeerId.value = "";
+          elements.profileJson.value = "";
+        }
+        elements.formStatus.textContent = "";
+      }
+
+      function buildPayload() {
+        const payload = {};
+        const userIdValue = elements.userId.value.trim();
+        if (userIdValue) {
+          payload.user_id = Number(userIdValue);
+        }
+        if (elements.platform.value.trim() !== "") {
+          payload.platform = elements.platform.value.trim();
+        }
+        if (elements.firstName.value.trim() !== "") {
+          payload.first_name = elements.firstName.value.trim();
+        }
+        if (elements.lastName.value.trim() !== "") {
+          payload.last_name = elements.lastName.value.trim();
+        }
+        if (elements.age.value.trim() !== "") {
+          payload.age = Number(elements.age.value.trim());
+        }
+        if (elements.sex.value.trim() !== "") {
+          payload.sex = Number(elements.sex.value.trim());
+        }
+        if (elements.statusField.value.trim() !== "") {
+          payload.status = elements.statusField.value.trim();
+        }
+        if (elements.registrationStep.value.trim() !== "") {
+          payload.registration_step = elements.registrationStep.value.trim();
+        }
+        if (elements.bio.value.trim() !== "") {
+          payload.bio = elements.bio.value.trim();
+        }
+        if (elements.lookingFor.value.trim() !== "") {
+          payload.looking_for = elements.lookingFor.value.trim();
+        }
+        if (elements.loveDefinition.value.trim() !== "") {
+          payload.love_definition = elements.loveDefinition.value.trim();
+        }
+        if (elements.zodiac.value.trim() !== "") {
+          payload.zodiac = elements.zodiac.value.trim();
+        }
+        if (elements.dateIdea.value.trim() !== "") {
+          payload.date_idea = elements.dateIdea.value.trim();
+        }
+        if (elements.share.value.trim() !== "") {
+          payload.share = elements.share.value.trim();
+        }
+        if (elements.redFlags.value.trim() !== "") {
+          payload.red_flags = elements.redFlags.value.trim();
+        }
+        if (elements.pet.value.trim() !== "") {
+          payload.pet = elements.pet.value.trim();
+        }
+        if (elements.important.value.trim() !== "") {
+          payload.important = elements.important.value.trim();
+        }
+        if (elements.temperament.value.trim() !== "") {
+          payload.temperament = elements.temperament.value.trim();
+        }
+        if (elements.registeredAt.value.trim() !== "") {
+          payload.registered_at = elements.registeredAt.value.trim();
+        }
+        if (elements.updatedAt.value.trim() !== "") {
+          payload.updated_at = elements.updatedAt.value.trim();
+        }
+        if (elements.lastMessageId.value.trim() !== "") {
+          payload.last_message_id = Number(elements.lastMessageId.value.trim());
+        }
+        if (elements.lastMessageAt.value.trim() !== "") {
+          payload.last_message_at = elements.lastMessageAt.value.trim();
+        }
+        if (elements.lastMessageText.value.trim() !== "") {
+          payload.last_message_text = elements.lastMessageText.value.trim();
+        }
+        if (elements.lastPeerId.value.trim() !== "") {
+          payload.last_peer_id = Number(elements.lastPeerId.value.trim());
+        }
+        if (elements.profileJson.value.trim() !== "") {
+          payload.profile_json = elements.profileJson.value.trim();
+        }
+        return payload;
+      }
+
+      async function fetchAllUsers() {
+        const data = await apiRequest("/api/users?limit=1000&offset=0");
+        state.allUsers = data.items || [];
+        updateRole(data.role);
+        updateChatWindow(data);
+      }
+
+      function renderLinkResults(query) {
+        const q = query.trim().toLowerCase();
+        const allowPersonal = state.role !== "manager";
+        const results = state.allUsers.filter((user) => {
+          if (user.id === state.linkTargetUserId) return false;
+          if (state.linkTargetPlatform && user.platform !== state.linkTargetPlatform) return false;
+          const fullName = allowPersonal
+            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim().toLowerCase()
+            : "";
+          const idMatch =
+            String(user.id).includes(q) || (allowPersonal && String(user.user_id ?? "").includes(q));
+          if (!q) return true;
+          return (allowPersonal && fullName.includes(q)) || idMatch;
+        });
+
+        const limited = q ? results.slice(0, 40) : results.slice(0, 20);
+        elements.linkResults.innerHTML = "";
+
+        if (limited.length === 0) {
+          elements.linkResults.innerHTML =
+            '<div class="px-3 py-2 text-sm text-slate-400">No results</div>';
+          return;
+        }
+
+        limited.forEach((user) => {
+          const row = document.createElement("button");
+          const fullName =
+            `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Без имени";
+          const taken = user.partner_id && user.partner_id !== state.linkTargetUserId;
+          const isSelected = user.id === state.linkSelectedPartnerId;
+
+          row.type = "button";
+          row.className = `flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition ${
+            taken
+              ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+              : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+          } ${isSelected ? "border-emerald-400 bg-emerald-50" : ""}`;
+
+          if (state.role === "manager") {
+            row.innerHTML = `
+              <span>ID ${user.id}</span>
+              <span class="text-xs text-slate-400">${taken ? "paired" : ""}</span>
+            `;
+          } else {
+            row.innerHTML = `
+              <span>${fullName}</span>
+              <span class="text-xs text-slate-400">ID ${user.id} · ${user.platform} ${user.user_id}${
+                taken ? " · paired" : ""
+              }</span>
+            `;
+          }
+
+          if (!taken) {
+            row.addEventListener("click", () => {
+              state.linkSelectedPartnerId = user.id;
+              updateLinkSelected();
+              renderLinkResults(elements.linkSearch.value);
+            });
+          }
+
+          elements.linkResults.appendChild(row);
+        });
+      }
+
+      function updateLinkSelected() {
+        if (!state.linkSelectedPartnerId) {
+          elements.linkSelected.textContent = "No partner selected";
+          return;
+        }
+        const user = state.allUsers.find((u) => u.id === state.linkSelectedPartnerId);
+        if (state.role === "manager") {
+          elements.linkSelected.textContent = `Selected: ID ${user?.id ?? "—"}`;
+          return;
+        }
+        const fullName = `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || "Без имени";
+        elements.linkSelected.textContent = `Selected: ${fullName} (ID ${user?.id}, ${user?.platform} ${user?.user_id})`;
+      }
+
+      function formatMonthDay(value) {
+        if (!value) return "—";
+        const raw = typeof value === "string" ? value.trim() : String(value);
+        const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) {
+          return "—";
+        }
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        return `${mm}-${dd}`;
+      }
+
+      function parseDateTime(value) {
+        if (!value) return null;
+        const raw = typeof value === "string" ? value.trim() : String(value);
+        if (!raw) return null;
+        const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) {
+          return null;
+        }
+        return date;
+      }
+
+      function withPass(path) {
+        if (!auth.pass) return path;
+        const sep = path.includes("?") ? "&" : "?";
+        return `${path}${sep}pass=${encodeURIComponent(auth.pass)}`;
+      }
+
+      async function apiRequest(path, options = {}) {
+        const response = await fetch(withPass(path), {
+          headers: { "Content-Type": "application/json" },
+          ...options,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          setAuthState(false);
+          throw new Error("Unauthorized");
+        }
+        if (!response.ok) {
+          const message = data.error || `Request failed (${response.status})`;
+          throw new Error(message);
+        }
+        setAuthState(true);
+        return data;
+      }
+
+      function setBroadcastStatus(message, isError = false) {
+        if (!elements.broadcastStatus) return;
+        elements.broadcastStatus.textContent = message;
+        elements.broadcastStatus.className = isError ? "text-sm text-rose-500" : "text-sm text-slate-400";
+      }
+
+      function setModeStatus(message, isError = false) {
+        if (!elements.modeStatus) return;
+        elements.modeStatus.textContent = message;
+        elements.modeStatus.className = isError ? "text-sm text-rose-500" : "text-sm text-slate-400";
+      }
+
+      async function loadMode() {
+        if (state.role !== "admin" || !elements.modeSelect) return;
+        try {
+          const data = await apiRequest("/api/settings");
+          elements.modeSelect.value = data.mode || "off";
+          setModeStatus("");
+        } catch (error) {
+          setModeStatus(error.message, true);
+        }
+      }
+
+      async function saveMode() {
+        if (state.role !== "admin" || !elements.modeSelect || !elements.modeSave) return;
+        const mode = elements.modeSelect.value;
+        elements.modeSave.disabled = true;
+        setModeStatus("Сохраняем...", false);
+        try {
+          const data = await apiRequest("/api/settings", {
+            method: "PUT",
+            body: JSON.stringify({ mode }),
+          });
+          elements.modeSelect.value = data.mode || mode;
+          setModeStatus("Режим обновлён.");
+        } catch (error) {
+          setModeStatus(error.message, true);
+        } finally {
+          elements.modeSave.disabled = false;
+        }
+      }
+
+      async function sendBroadcast(mode) {
+        if (!elements.broadcastText) return;
+        const text = elements.broadcastText.value.trim();
+        if (!text) {
+          setBroadcastStatus("Введите текст рассылки.", true);
+          return;
+        }
+        const endpoint = mode === "test" ? "/api/broadcast/tg/test" : "/api/broadcast/tg/all";
+        const buttons = [elements.broadcastTest, elements.broadcastAll];
+        buttons.forEach((btn) => {
+          if (btn) btn.disabled = true;
+        });
+        setBroadcastStatus("Отправка...", false);
+        try {
+          const data = await apiRequest(endpoint, {
+            method: "POST",
+            body: JSON.stringify({ text }),
+          });
+          const failedCount = data.failed ? Object.keys(data.failed).length : 0;
+          setBroadcastStatus(`Отправлено: ${data.sent}/${data.total}. Ошибки: ${failedCount}.`, failedCount > 0);
+        } catch (error) {
+          setBroadcastStatus(error.message, true);
+        } finally {
+          buttons.forEach((btn) => {
+            if (btn) btn.disabled = false;
+          });
+        }
+      }
+
+      async function loadUsers() {
+        if (!auth.pass) {
+          setAuthState(false);
+          return;
+        }
+        const limit = Math.max(parseInt(elements.limit.value, 10) || 50, 1);
+        const offset = Math.max(parseInt(elements.offset.value, 10) || 0, 0);
+        const data = await apiRequest(`/api/users?limit=${limit}&offset=${offset}`);
+        updateRole(data.role);
+        updateChatWindow(data);
+        if (elements.genderStats) {
+          const men = data?.stats?.men ?? 0;
+          const women = data?.stats?.women ?? 0;
+          elements.genderStats.textContent = `Мужчин: ${men} · Женщин: ${women}`;
+        }
+        const onlyUnpaired = elements.filterUnpaired.checked;
+        const items = onlyUnpaired
+          ? (data.items || []).filter((user) => !user.partner_id)
+          : data.items || [];
+
+        elements.meta.textContent = `Showing ${items.length} records (limit ${data.limit}, offset ${data.offset})`;
+        elements.body.innerHTML = "";
+
+        if (items.length === 0) {
+          elements.empty.classList.remove("hidden");
+          return;
+        }
+        elements.empty.classList.add("hidden");
+
+        const now = new Date();
+        const chatStart = parseDateTime(state.chatStart);
+        const chatEnd = parseDateTime(state.chatEnd);
+        const isChatDay =
+          chatStart && chatEnd ? now >= chatStart && now <= chatEnd : false;
+
+        items.forEach((user) => {
+          const tr = document.createElement("tr");
+          tr.className = user.partner_id
+            ? "bg-emerald-50 hover:bg-emerald-100"
+            : "hover:bg-slate-50";
+
+          const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || "—";
+
+          const cells = [
+            { key: "id", value: user.id ?? "—" },
+            { key: "user_id", value: user.user_id ?? "—" },
+            { key: "platform", value: user.platform ?? "—" },
+            { key: "partner_id", value: user.partner_id ?? "—" },
+            { key: "name", value: name },
+            { key: "age", value: user.age ?? "—" },
+            { key: "sex", value: user.sex ?? "—" },
+            { key: "status", value: user.status ?? "—" },
+            { key: "registration_step", value: user.registration_step ?? "—" },
+            { key: "bio", value: user.bio ?? "—" },
+            { key: "looking_for", value: user.looking_for ?? "—" },
+            { key: "love_definition", value: user.love_definition ?? "—" },
+            { key: "zodiac", value: user.zodiac ?? "—" },
+            { key: "date_idea", value: user.date_idea ?? "—" },
+            { key: "share", value: user.share ?? "—" },
+            { key: "red_flags", value: user.red_flags ?? "—" },
+            { key: "pet", value: user.pet ?? "—" },
+            { key: "important", value: user.important ?? "—" },
+            { key: "temperament", value: user.temperament ?? "—" },
+            { key: "registered_at", value: formatMonthDay(user.registered_at) },
+          ];
+
+          cells.forEach(({ key, value }) => {
+            const td = document.createElement("td");
+            td.dataset.col = key;
+            td.className = "px-4 py-3 align-top text-slate-600 break-words whitespace-pre-wrap";
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+
+          const actions = document.createElement("td");
+          actions.className = "px-4 py-3 text-right";
+
+          const actionWrap = document.createElement("div");
+          actionWrap.className = "flex flex-col items-end gap-2";
+
+          const linkBtn = document.createElement("button");
+          linkBtn.className =
+            "rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:border-emerald-300 hover:text-emerald-700";
+          linkBtn.textContent = "Link";
+          linkBtn.addEventListener("click", async () => {
+            state.linkTargetUserId = user.id;
+            state.linkCurrentPartnerId = user.partner_id ?? null;
+            state.linkSelectedPartnerId = user.partner_id ?? null;
+            state.linkTargetPlatform = user.platform ?? null;
+            elements.linkError.textContent = "";
+            elements.linkSearch.value = "";
+            await fetchAllUsers();
+            updateLinkSelected();
+            renderLinkResults("");
+            openLinkModal();
+            elements.linkSearch.focus();
+          });
+
+          const unlinkBtn = document.createElement("button");
+          unlinkBtn.className =
+            "rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-600 transition hover:border-amber-300 hover:text-amber-700";
+          unlinkBtn.textContent = "Unlink";
+          unlinkBtn.addEventListener("click", async () => {
+            const label =
+              state.role === "manager" ? `ID ${user.id ?? "—"}` : `${user.user_id ?? "—"}`;
+            const ok = window.confirm(`Unlink user ${label}?`);
+            if (!ok) return;
+            try {
+              await apiRequest(`/api/pairs/${user.id}`, { method: "DELETE" });
+              await loadUsers();
+            } catch (error) {
+              elements.formStatus.textContent = error.message;
+            }
+          });
+
+          const editBtn = document.createElement("button");
+          editBtn.className =
+            "rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800";
+          editBtn.textContent = "Edit";
+          editBtn.addEventListener("click", () => {
+            setFormMode("edit", user);
+            openModal();
+          });
+
+          const pingBtn = document.createElement("button");
+          const lastMessageAt = parseDateTime(user.last_message_at);
+          const needsPing =
+            isChatDay && user.partner_id && (!lastMessageAt || lastMessageAt < chatStart);
+          pingBtn.className = needsPing
+            ? "rounded-full border px-3 py-1 text-xs font-semibold ping-alert"
+            : "rounded-full border border-sky-200 px-3 py-1 text-xs font-semibold text-sky-600 transition hover:border-sky-300 hover:text-sky-700";
+          pingBtn.textContent = "Пингануть";
+          pingBtn.addEventListener("click", async () => {
+            const ok = window.confirm("Отправить пинг этому участнику?");
+            if (!ok) return;
+            pingBtn.disabled = true;
+            try {
+              await apiRequest(`/api/ping/${user.id}`, { method: "POST" });
+              window.alert("Пинг отправлен.");
+            } catch (error) {
+              window.alert(error.message);
+            } finally {
+              pingBtn.disabled = false;
+            }
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className =
+            "rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-500 transition hover:border-rose-300 hover:text-rose-600";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            const ok = window.confirm(`Delete user ${user.user_id}?`);
+            if (!ok) return;
+            try {
+              await apiRequest(`/api/users/${user.id}`, { method: "DELETE" });
+              if (state.selectedUserId === user.id) {
+                setFormMode("create");
+                closeModal();
+              }
+              await loadUsers();
+            } catch (error) {
+              elements.formStatus.textContent = error.message;
+            }
+          });
+
+          actionWrap.appendChild(linkBtn);
+          if (user.partner_id) {
+            actionWrap.appendChild(unlinkBtn);
+          }
+          actionWrap.appendChild(editBtn);
+          actionWrap.appendChild(pingBtn);
+          actionWrap.appendChild(deleteBtn);
+          actions.appendChild(actionWrap);
+          tr.appendChild(actions);
+          elements.body.appendChild(tr);
+        });
+        applyRoleVisibility();
+      }
+
+      elements.refresh.addEventListener("click", loadUsers);
+      elements.filterUnpaired.addEventListener("change", loadUsers);
+      elements.resetForm.addEventListener("click", () => {
+        if (!auth.pass) {
+          setAuthState(false);
+          return;
+        }
+        setFormMode("create");
+        openModal();
+      });
+      elements.cancel.addEventListener("click", () => {
+        setFormMode("create");
+        closeModal();
+      });
+      elements.closeModal.addEventListener("click", closeModal);
+      elements.modalBackdrop.addEventListener("click", closeModal);
+      elements.linkCancel.addEventListener("click", closeLinkModal);
+      elements.linkCancelSecondary.addEventListener("click", closeLinkModal);
+      elements.linkBackdrop.addEventListener("click", closeLinkModal);
+      elements.linkSearch.addEventListener("input", (event) => {
+        renderLinkResults(event.target.value);
+      });
+      if (elements.broadcastTest) {
+        elements.broadcastTest.addEventListener("click", () => sendBroadcast("test"));
+      }
+      if (elements.broadcastAll) {
+        elements.broadcastAll.addEventListener("click", () => {
+          const ok = window.confirm("Отправить всем участникам Telegram?");
+          if (!ok) return;
+          sendBroadcast("all");
+        });
+      }
+      if (elements.modeSave) {
+        elements.modeSave.addEventListener("click", () => {
+          saveMode();
+        });
+      }
+      elements.linkSave.addEventListener("click", async () => {
+        elements.linkError.textContent = "";
+        const targetId = state.linkTargetUserId;
+        const partnerId = state.linkSelectedPartnerId;
+        if (!targetId || !partnerId) {
+          elements.linkError.textContent = "Select a partner first.";
+          return;
+        }
+        if (targetId === partnerId) {
+          elements.linkError.textContent = "User cannot be paired with themselves.";
+          return;
+        }
+        try {
+          if (state.linkCurrentPartnerId && state.linkCurrentPartnerId !== partnerId) {
+            await apiRequest(`/api/pairs/${targetId}`, { method: "DELETE" });
+          }
+          if (state.linkCurrentPartnerId !== partnerId) {
+            await apiRequest("/api/pairs", {
+              method: "POST",
+              body: JSON.stringify({ user1_id: targetId, user2_id: partnerId }),
+            });
+          }
+          closeLinkModal();
+          await loadUsers();
+        } catch (error) {
+          elements.linkError.textContent = error.message;
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeModal();
+          closeLinkModal();
+        }
+      });
+
+      elements.form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        elements.formStatus.textContent = "";
+
+        const payload = buildPayload();
+        try {
+          if (state.mode === "create") {
+            if (!payload.user_id) {
+              throw new Error("User ID is required");
+            }
+            await apiRequest("/api/users", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+          } else if (state.selectedUserId) {
+            delete payload.user_id;
+            if (Object.keys(payload).length === 0) {
+              throw new Error("Provide at least one field to update");
+            }
+            await apiRequest(`/api/users/${state.selectedUserId}`, {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            });
+          }
+          setFormMode("create");
+          closeModal();
+          await loadUsers();
+        } catch (error) {
+          elements.formStatus.textContent = error.message;
+        }
+      });
+
+      loadUsers().catch((error) => {
+        elements.meta.textContent = "Failed to load users.";
+        elements.formStatus.textContent = error.message;
+      });
+
+      setInterval(() => {
+        loadUsers().catch((error) => {
+          elements.meta.textContent = "Failed to load users.";
+          elements.formStatus.textContent = error.message;
+        });
+      }, 10000);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    command: python app.py
+    env_file: .env
+    environment:
+      API_HOST: 0.0.0.0
+      DB_PATH: /data/bot.sqlite3
+    volumes:
+      - ./bot.sqlite3:/data/bot.sqlite3
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  tg_bot:
+    build: .
+    command: python tg_bot.py
+    env_file: .env
+    environment:
+      DB_PATH: /data/bot.sqlite3
+    volumes:
+      - ./bot.sqlite3:/data/bot.sqlite3
+    restart: unless-stopped

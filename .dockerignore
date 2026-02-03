@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.swp
+.venv/
+.env
+bot.sqlite3
+.git/
+.gitignore
+.DS_Store
