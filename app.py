@@ -603,6 +603,59 @@ def build_ping_message():
     )
 
 
+def format_registration_deadline():
+    raw_value = get_env("REG_END", default=get_env("date_end", "")).strip()
+    if not raw_value:
+        return "окончания регистрации"
+    try:
+        dt = datetime.fromisoformat(raw_value)
+    except ValueError:
+        return raw_value
+    months = (
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+    )
+    return f"{dt.day} {months[dt.month - 1]} {dt:%H:%M}"
+
+
+def build_registration_reminder_message():
+    deadline = format_registration_deadline()
+    return (
+        "Привет! Вижу, что твоя анкета заполнена не до конца.\n"
+        f"Пожалуйста, дополни её до {deadline} — так мы точно успеем подобрать тебе пару."
+    )
+
+
+def send_platform_message(platform, target_id, message):
+    if platform == "tg":
+        token = get_env("TG_BOT_TOKEN", default="").strip()
+        if not token:
+            return False, "TG_BOT_TOKEN is not configured", 500
+        ok, error = tg_send_message(token, target_id, message)
+        if not ok:
+            return False, error or "Telegram send failed", 500
+        return True, None, None
+    if platform == "vk":
+        token = get_env("VK_GROUP_TOKEN", default="").strip()
+        if not token:
+            return False, "VK_GROUP_TOKEN is not configured", 500
+        ok, error = vk_send_message(token, target_id, message)
+        if not ok:
+            return False, error or "VK send failed", 500
+        return True, None, None
+    return False, "Unsupported platform", 400
+
+
 @app.post("/api/ping/<int:user_id>")
 @require_auth
 def ping_user(user_id):
@@ -618,22 +671,31 @@ def ping_user(user_id):
     platform = row[1]
     message = build_ping_message()
 
-    if platform == "tg":
-        token = get_env("TG_BOT_TOKEN", default="").strip()
-        if not token:
-            return jsonify({"error": "TG_BOT_TOKEN is not configured"}), 500
-        ok, error = tg_send_message(token, target_id, message)
-        if not ok:
-            return jsonify({"error": error or "Telegram send failed"}), 500
-    elif platform == "vk":
-        token = get_env("VK_GROUP_TOKEN", default="").strip()
-        if not token:
-            return jsonify({"error": "VK_GROUP_TOKEN is not configured"}), 500
-        ok, error = vk_send_message(token, target_id, message)
-        if not ok:
-            return jsonify({"error": error or "VK send failed"}), 500
-    else:
-        return jsonify({"error": "Unsupported platform"}), 400
+    ok, error, status_code = send_platform_message(platform, target_id, message)
+    if not ok:
+        return jsonify({"error": error}), status_code
+
+    return jsonify({"ok": True, "platform": platform, "user_id": target_id})
+
+
+@app.post("/api/registration-reminder/<int:user_id>")
+@require_auth
+def registration_reminder_user(user_id):
+    with connect_db() as conn:
+        row = conn.execute(
+            "SELECT user_id, platform FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "User not found"}), 404
+
+    target_id = row[0]
+    platform = row[1]
+    message = build_registration_reminder_message()
+
+    ok, error, status_code = send_platform_message(platform, target_id, message)
+    if not ok:
+        return jsonify({"error": error}), status_code
 
     return jsonify({"ok": True, "platform": platform, "user_id": target_id})
 
