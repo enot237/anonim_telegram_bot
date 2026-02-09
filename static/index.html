@@ -139,6 +139,16 @@
           </div>
           <div class="flex items-center gap-3">
             <label class="flex items-center gap-2 text-sm text-slate-500">
+              Регистрация
+              <select
+                id="registration-state-filter"
+                class="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              >
+                <option value="registered">Зарегистрированы</option>
+                <option value="in_progress">В процессе регистрации</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-500">
               <input
                 id="filter-unpaired"
                 type="checkbox"
@@ -167,6 +177,24 @@
                 class="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
               />
             </label>
+            <label class="flex items-center gap-2 text-sm text-slate-500">
+              Auto refresh (sec)
+              <input
+                id="refresh-interval"
+                type="number"
+                min="10"
+                max="60"
+                value="10"
+                class="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-800 focus:border-slate-400 focus:outline-none"
+              />
+            </label>
+            <button
+              id="apply-list-settings"
+              type="button"
+              class="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow"
+            >
+              Применить
+            </button>
           </div>
         </div>
         <div class="overflow-x-auto">
@@ -570,6 +598,9 @@
         body: document.getElementById("users-body"),
         limit: document.getElementById("limit"),
         offset: document.getElementById("offset"),
+        refreshInterval: document.getElementById("refresh-interval"),
+        applyListSettings: document.getElementById("apply-list-settings"),
+        registrationStateFilter: document.getElementById("registration-state-filter"),
         filterUnpaired: document.getElementById("filter-unpaired"),
         refresh: document.getElementById("refresh"),
         resetForm: document.getElementById("reset-form"),
@@ -631,6 +662,13 @@
         pass: new URLSearchParams(window.location.search).get("pass"),
         authorized: false,
       };
+      const registrationStateLabels = {
+        registered: "зарегистрированы",
+        in_progress: "в процессе регистрации",
+      };
+      const REFRESH_INTERVAL_MIN_SECONDS = 10;
+      const REFRESH_INTERVAL_MAX_SECONDS = 60;
+      let autoRefreshTimerId = null;
 
       const managerHiddenColumns = new Set(["user_id", "name", "platform", "registration_step"]);
 
@@ -1025,6 +1063,44 @@
         }
       }
 
+      function normalizeRefreshIntervalSeconds() {
+        const raw = parseInt(elements.refreshInterval.value, 10);
+        const clamped = Math.min(
+          Math.max(raw || REFRESH_INTERVAL_MIN_SECONDS, REFRESH_INTERVAL_MIN_SECONDS),
+          REFRESH_INTERVAL_MAX_SECONDS
+        );
+        elements.refreshInterval.value = String(clamped);
+        return clamped;
+      }
+
+      function normalizeListControls() {
+        const limit = Math.max(parseInt(elements.limit.value, 10) || 50, 1);
+        const offset = Math.max(parseInt(elements.offset.value, 10) || 0, 0);
+        elements.limit.value = String(limit);
+        elements.offset.value = String(offset);
+      }
+
+      function handleLoadUsersError(error) {
+        elements.meta.textContent = "Failed to load users.";
+        elements.formStatus.textContent = error.message;
+      }
+
+      function startAutoRefresh() {
+        if (autoRefreshTimerId) {
+          window.clearInterval(autoRefreshTimerId);
+        }
+        const refreshMs = normalizeRefreshIntervalSeconds() * 1000;
+        autoRefreshTimerId = window.setInterval(() => {
+          loadUsers().catch(handleLoadUsersError);
+        }, refreshMs);
+      }
+
+      function applyListSettings() {
+        normalizeListControls();
+        startAutoRefresh();
+        loadUsers().catch(handleLoadUsersError);
+      }
+
       async function saveMode() {
         if (state.role !== "admin" || !elements.modeSelect || !elements.modeSave) return;
         const mode = elements.modeSelect.value;
@@ -1080,7 +1156,11 @@
         }
         const limit = Math.max(parseInt(elements.limit.value, 10) || 50, 1);
         const offset = Math.max(parseInt(elements.offset.value, 10) || 0, 0);
-        const data = await apiRequest(`/api/users?limit=${limit}&offset=${offset}`);
+        const registrationState = elements.registrationStateFilter.value;
+        const stateLabel = registrationStateLabels[registrationState] || registrationState;
+        const data = await apiRequest(
+          `/api/users?limit=${limit}&offset=${offset}&registration_state=${encodeURIComponent(registrationState)}`
+        );
         updateRole(data.role);
         updateChatWindow(data);
         if (elements.genderStats) {
@@ -1093,7 +1173,7 @@
           ? (data.items || []).filter((user) => !user.partner_id)
           : data.items || [];
 
-        elements.meta.textContent = `Showing ${items.length} records (limit ${data.limit}, offset ${data.offset})`;
+        elements.meta.textContent = `Showing ${items.length} records (${stateLabel}, limit ${data.limit}, offset ${data.offset})`;
         elements.body.innerHTML = "";
 
         if (items.length === 0) {
@@ -1253,6 +1333,11 @@
       }
 
       elements.refresh.addEventListener("click", loadUsers);
+      elements.applyListSettings.addEventListener("click", applyListSettings);
+      elements.registrationStateFilter.addEventListener("change", () => {
+        elements.offset.value = "0";
+        loadUsers();
+      });
       elements.filterUnpaired.addEventListener("change", loadUsers);
       elements.resetForm.addEventListener("click", () => {
         if (!auth.pass) {
@@ -1356,17 +1441,9 @@
         }
       });
 
-      loadUsers().catch((error) => {
-        elements.meta.textContent = "Failed to load users.";
-        elements.formStatus.textContent = error.message;
-      });
-
-      setInterval(() => {
-        loadUsers().catch((error) => {
-          elements.meta.textContent = "Failed to load users.";
-          elements.formStatus.textContent = error.message;
-        });
-      }, 10000);
+      normalizeListControls();
+      loadUsers().catch(handleLoadUsersError);
+      startAutoRefresh();
     </script>
   </body>
 </html>

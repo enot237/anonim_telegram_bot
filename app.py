@@ -174,6 +174,7 @@ def utc_now_iso():
 
 
 MODE_OPTIONS = {"off", "registration", "prep", "chat", "finished"}
+REGISTRATION_STATE_OPTIONS = {"all", "registered", "in_progress"}
 
 
 def get_setting(conn, key, default=None):
@@ -365,13 +366,30 @@ def settings_update():
 def users_list():
     limit = min(parse_int(request.args.get("limit", 50), 50), 1000)
     offset = max(parse_int(request.args.get("offset", 0), 0), 0)
+    registration_state = (request.args.get("registration_state") or "all").strip().lower()
+    if registration_state not in REGISTRATION_STATE_OPTIONS:
+        registration_state = "all"
     role = get_role(request)
     chat_start = get_env("CHAT_START", default="").strip()
     chat_end = get_env("CHAT_END", default="").strip()
 
+    where_clauses = []
+    if registration_state == "registered":
+        where_clauses.append(
+            "(COALESCE(users.status, 'registered') = 'registered' AND "
+            "(users.registration_step IS NULL OR TRIM(users.registration_step) = ''))"
+        )
+    elif registration_state == "in_progress":
+        where_clauses.append(
+            "NOT (COALESCE(users.status, 'registered') = 'registered' AND "
+            "(users.registration_step IS NULL OR TRIM(users.registration_step) = ''))"
+        )
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
     with connect_db() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT users.id, users.user_id, users.platform, users.first_name, users.last_name, users.sex, users.status, users.bio,
                    users.registration_step, users.age, users.looking_for, users.love_definition, users.zodiac,
                    users.date_idea, users.share, users.red_flags, users.pet, users.important, users.temperament,
@@ -384,17 +402,19 @@ def users_list():
                    END AS partner_id
             FROM users
             LEFT JOIN pairs ON users.id = pairs.user1_id OR users.id = pairs.user2_id
+            {where_sql}
             ORDER BY users.updated_at DESC
             LIMIT ? OFFSET ?
             """,
             (limit, offset),
         ).fetchall()
         counts = conn.execute(
-            """
+            f"""
             SELECT
                 SUM(CASE WHEN sex = 2 THEN 1 ELSE 0 END) AS men,
                 SUM(CASE WHEN sex = 1 THEN 1 ELSE 0 END) AS women
             FROM users
+            {where_sql}
             """
         ).fetchone()
 
@@ -405,6 +425,7 @@ def users_list():
             "limit": limit,
             "offset": offset,
             "count": len(users),
+            "registration_state": registration_state,
             "role": role,
             "chat_start": chat_start,
             "chat_end": chat_end,
